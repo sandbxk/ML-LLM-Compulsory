@@ -1,29 +1,39 @@
 import ast
+import os
+
 from autogen import AssistantAgent, UserProxyAgent, ChatResult, register_function
 from autogen.coding import LocalCommandLineCodeExecutor
-from coding_agent.tools.feedback_reader_tool import feedback_reader
-from coding_agent.tools.sentiment_analysis_tool import sentiment_analysis
-from coding_agent.tools.calculate_average_tool import calculate_average
+
 from coding_agent.config import LLM_CONFIG
+from coding_agent.tools.code_outputter import output_code
+from coding_agent.tools.code_verifier import verify_function
+from coding_agent.tools.code_writer import write_function
+
+Coding_directory = "coding_directory"
 
 ReAct_prompt = """
-Answer the following questions as best you can. You have access to the tools provided.
+You are an expert Python coding assistant. Your task is to solve programming challenges by writing Python code, verifying its correctness, and presenting the final solution.
+
+You have access to several tools to help you accomplish this:
+
+- **write_python_function**: Generates a Python function based on a coding task description.
+- **verify_python_function**: Verifies the generated Python code by running tests and provides the results.
+- **output_python_code**: Outputs the generated Python code in a formatted way, including verification results.
 
 Use the following format:
 
-Question: the input question you must answer
-Thought: you should always think about what to do and what tool to use
-Action: the action to take is ALWAYS one of the provided tools
-Action Input: the input to the action
-Observation: the result of the action. Only observe tools' outputs.
-... (this thought/action/action input/observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question and should be a result of the provided tools and nothing else
+Question: the coding task you need to solve
+Thought: carefully consider what needs to be done and which tool to use first
+Action: the action you need to take using one of the provided tools
+Action Input: the input to the action, such as a task description or function name
+Observation: the result of the action based on the tool's output
+... (this thought/action/action input/observation sequence can repeat as many times as necessary)
+Thought: I now have the final solution, which has been verified
+Final Answer: the final Python code solution, verified, formatted, and ready for presentation
 
 Begin!
 Question: {input}
 """
-
 
 def react_prompt_message(sender, recipient, context):
     """
@@ -32,14 +42,22 @@ def react_prompt_message(sender, recipient, context):
     return ReAct_prompt.format(input=context["question"])
 
 
-def create_feedback_analysis_agent() -> AssistantAgent:
+def create_coding_agent() -> AssistantAgent:
     """
-    Return a new feedback analysis agent.
+    Return a new coding agent.
     """
     agent = AssistantAgent(
         name="Assistant",
-        system_message="""
-        Only use tools. Don't try to reason. Reply TERMINATE when the task is done.
+        system_message=f"""
+        You are an AI assistant for writing and verifying Python code. Your task is to:
+        1. Write Python functions based on the provided prompts.
+        2. Save the generated Python code to the coding directory: {Coding_directory}.
+        3. Ensure the function passes predefined tests.
+        4. If tests are provided, write test cases and save them in the coding directory as well.
+        5. After generating code or test code, return the Python code and end with "FINISH".
+
+        Only use tools to interact with the environment and the code. Don't try to reason or generate content outside the scope of the task.
+        If you are done with the task, reply with "TERMINATE".
         """,
         llm_config=LLM_CONFIG
     )
@@ -79,37 +97,39 @@ def setup_agents():
     # Create the code executor, user proxy, and feedback analysis agent
     code_executor = create_local_code_executor()
     user_proxy = create_user_proxy(code_executor)
-    feedback_analysis_agent = create_feedback_analysis_agent()
+    coding_agent = create_coding_agent()
+
+
 
     # Add the feedback reader tool to the feedback analysis agent and user proxy agent
     register_function(
-        feedback_reader, 
-        caller=feedback_analysis_agent, 
-        executor=user_proxy, 
-        name="feedback_reader", 
-        description="Read customer feedback, optionally filtered by start_date and end_date as YYYY-MM-DD formatted strings."
+        write_function,
+        caller=coding_agent,
+        executor=user_proxy,
+        name="write_python_function",
+        description="Generates a Python function based on a task prompt and saves it to a file.",
     )
 
     # Add the sentiment analysis tool to the feedback analysis agent and user proxy agent
     register_function(
-        sentiment_analysis, 
-        caller=feedback_analysis_agent, 
-        executor=user_proxy, 
-        name="sentiment_analysis", 
-        description="Returns sentiment of a customer feedback given a list of feedback strings."
+        verify_function,
+        caller=coding_agent,
+        executor=user_proxy,
+        name="verify_python_function",
+        description="Verifies the generated Python function by running predefined tests."
     )
 
     # Add the calculate average tool to the feedback analysis agent and user proxy agent
     register_function(
-        calculate_average, 
-        caller=feedback_analysis_agent, 
-        executor=user_proxy, 
-        name="calculate_average", 
-        description="Calculate the average given a list of numbers."
+        output_code,
+        caller=coding_agent,
+        executor=user_proxy,
+        name="output_python_code",
+        description="Outputs the generated Python code in a code block format along with test verification results."
     )
 
     # Return the user proxy and feedback analysis agent
-    return user_proxy, feedback_analysis_agent
+    return user_proxy, coding_agent
 
 
 def get_tool_calls(chat_result: ChatResult):
@@ -154,15 +174,17 @@ def find_final_answer(chat_result: ChatResult):
 
 
 def main():
+    os.environ["AUTOGEN_USE_DOCKER"] = "False"
+
     # Setup the agents
-    user_proxy, feedback_analysis_agent = setup_agents()
+    user_proxy, coding_agent = setup_agents()
 
     # Define the task
-    task = "What is the average feedback sentiment in Q1 2024?"
+    task = "Write a Python function that takes a list of numbers and returns the average of the numbers."
 
     # Initiate the chat
     user_proxy.initiate_chat(
-        feedback_analysis_agent,
+        coding_agent,
         message=react_prompt_message,
         question=task
     )
