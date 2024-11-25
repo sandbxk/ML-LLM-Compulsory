@@ -14,11 +14,7 @@ Coding_directory = "coding_directory"
 ReAct_prompt = """
 You are an expert Python coding assistant. Your task is to solve programming challenges by writing Python code, verifying its correctness, and presenting the final solution.
 
-You have access to several tools to help you accomplish this:
 
-- **write_python_function**: Generates a Python function based on a coding task description.
-- **verify_python_function**: Verifies the generated Python code by running tests and provides the results.
-- **output_python_code**: Outputs the generated Python code in a code block format along with test verification results.
 
 Use the following format:
 
@@ -87,6 +83,7 @@ def create_local_code_executor():
     """
     return LocalCommandLineCodeExecutor(
         timeout=100,
+        work_dir="coding_directory",
     )
 
 
@@ -99,7 +96,7 @@ def setup_agents1():
     user_proxy = create_user_proxy(code_executor)
     coding_agent = create_coding_agent()
 
-
+    """
 
     # Add the feedback reader tool to the feedback analysis agent and user proxy agent
     register_function(
@@ -128,6 +125,7 @@ def setup_agents1():
         name="output_python_code",
         description="Outputs the generated Python code in a code block format along with test verification results."
     )
+    """
 
 
     # Return the user proxy and feedback analysis agent
@@ -143,39 +141,11 @@ def setup_agents():
     user_proxy = create_user_proxy(code_executor)
     coding_agent = create_coding_agent()
 
-
-
-    # Add the feedback reader tool to the feedback analysis agent and user proxy agent
-    register_function(
-        write_function,
-        caller=coding_agent,
-        executor=user_proxy,
-        name="write_python_function",
-        description="Generates a Python function based on a task prompt.",
-    )
-
-    # Add the sentiment analysis tool to the feedback analysis agent and user proxy agent
-    register_function(
-        verify_function,
-        caller=coding_agent,
-        executor=user_proxy,
-        name="verify_python_function",
-        description="Verifies a Python function by generating tests and running them."
-    )
-
-
-    # Add the calculate average tool to the feedback analysis agent and user proxy agent
-    register_function(
-        output_code,
-        caller=coding_agent,
-        executor=user_proxy,
-        name="output_python_code",
-        description="Outputs the generated Python code in a code block format along with test verification results."
-    )
-
-
     # Return the user proxy and feedback analysis agent
     return user_proxy, coding_agent
+
+
+
 
 
 def get_tool_calls(chat_result: ChatResult):
@@ -208,11 +178,11 @@ def find_final_answer(chat_result: ChatResult):
             # Get the final answer block    
             final_answer_block = message.get("content", "")
 
-            # Split the final answer block into lines
-            answer_block_lines = final_answer_block.split("\n")
+            # Extract the final answer
+            final_answer = final_answer_block.split("Final Answer:")[1].strip()
 
-            # Get the final answer
-            final_answer = answer_block_lines[-1].split("Final Answer:")[1].strip()
+            # Add a newline character at the beginning of the final answer
+            final_answer = "\n" + final_answer
             break
 
     # Return the final answer
@@ -236,14 +206,14 @@ def main():
     )
 
     # Get the final answer
-    #final_answer = find_final_answer(chat)
+    final_answer = find_final_answer(chat)
 
     # Get the tool calls
     tool_calls = get_tool_calls(chat)
 
     # Print the final answer and tool calls
-    #print("Final Answer:", final_answer)
     print("Tool Calls:", tool_calls)
+    print("Final Answer:", final_answer)
 
 
 

@@ -46,8 +46,7 @@ def write_function(prompt: str) -> tuple[Any, str]:
                               The code should be ready to be copied and pasted into a Python file, so do not use code-blocks either.""",
         is_termination_msg=lambda msg: msg.get("content") is not None and "FINISH" in msg["content"],
         llm_config=LLM_CONFIG,
-        human_input_mode="NEVER",
-
+        human_input_mode="NEVER"
     )
 
 

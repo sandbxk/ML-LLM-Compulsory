@@ -1,1 +1,0 @@
-Write a Python function based on the following task: Write a Python function that takes a list of numbers and returns the average of the numbers.. Return the code and end with "FINISH".
