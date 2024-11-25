@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Tuple, Any
 
 from autogen import ConversableAgent, UserProxyAgent
+from flaml.autogen import AssistantAgent
 
 from coding_agent.config import LLM_CONFIG
 
@@ -37,40 +38,51 @@ def write_function(prompt: str) -> tuple[Any, str]:
     if not os.path.exists(coding_directory):
         os.makedirs(coding_directory)
 
-    sub_agent = ConversableAgent(
+    sub_agent = AssistantAgent(
         name="Code Writing Agent",
         system_message="""You are an expert Python developer. 
                               Your task is to generate a Python function based on the given description. 
-                              Make sure the code is clean, well-commented, and correct.""",
+                              Make sure the code is clean, well-commented, and correct. You do not write anything apart from the code. 
+                              The code should be ready to be copied and pasted into a Python file, so do not use code-blocks either.""",
         is_termination_msg=lambda msg: msg.get("content") is not None and "FINISH" in msg["content"],
         llm_config=LLM_CONFIG,
-    )
-
-    # Sub-agent to handle code generation
-    user_proxy = UserProxyAgent(
-        name="User",
-        llm_config=False,
-        is_termination_msg=lambda msg: msg.get("content") is not None and "FINISH" in msg["content"],
         human_input_mode="NEVER",
-    )
-    user_proxy.initiate_chat(
-        recipient=sub_agent,
-        max_turns=3,
-        message=f'Write a Python function based on the following task: {prompt}. Return the code and end with "FINISH".'
+
     )
 
-    reply = user_proxy.last_message()
-    if not reply or "content" not in reply:
-        raise ValueError("No reply or content found")
 
-    # Clean the reply to get only the code
-    code = reply["content"].replace("\nFINISH", "").strip()
+    reply = sub_agent.generate_reply(
+        messages=[
+            {"role": "user", "content": f'Write a Python function based on the following task: {prompt}. '
+                                        f'Do not write anything apart from the code. And do not use code-blocks. Or any none-code text '},
+        ],
+    )
 
-    # unqiue name
-    unique_filename = _generate_unique_filename("code_gen", ".py", coding_directory)
+    if not reply:
+        raise ValueError("No reply found")
+
+    reply_value = ""
+    if isinstance(reply, dict):
+        reply_content = reply["content"]
+        if reply_content:
+            reply_value = reply_content
+        else:
+            raise ValueError("No content found in the reply")
+    else:
+        reply_value = reply
+
+    reply_value = reply_value.replace("\nFINISH", "").strip()
+
+    code = reply_value
+
+    # Remove ```python code blocks
+    code = code.replace("```python", "").replace("```", "").strip()
+
 
     # Save the generated code to a file
-    with open(unique_filename, "w") as file:
+    code_filename = _generate_unique_filename("generated_code", ".py", coding_directory)
+    with open(code_filename, "w") as file:
         file.write(code)
 
-    return code, unique_filename
+    return code, code_filename
+

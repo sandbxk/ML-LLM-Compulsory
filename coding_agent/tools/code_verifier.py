@@ -17,8 +17,14 @@ def verify_function(source_code: str, code_filename: str) -> Tuple[bool, str]:
     :param coding_directory: The directory where the source code file is saved.
     :return: A tuple (bool, str) where the first element indicates if tests passed, and the second is the output.
     """
+    print("source_code:", source_code)
 
     coding_directory = os.path.dirname(code_filename)
+
+    # Read code from file
+    with open(code_filename, "r") as code_file:
+        source_code = code_file.read()
+
 
     sub_agent = ConversableAgent(
         name="Test Generation Agent",
@@ -29,29 +35,37 @@ def verify_function(source_code: str, code_filename: str) -> Tuple[bool, str]:
         llm_config=LLM_CONFIG,
     )
 
-    # Sub-agent to handle test generation, with access to the function's source code
-    user_proxy = UserProxyAgent(
-        name="User",
-        llm_config=False,
-        is_termination_msg=lambda msg: msg.get("content") is not None and "FINISH" in msg["content"],
-        human_input_mode="NEVER",
-    )
-    user_proxy.initiate_chat(
-        recipient=sub_agent,
-        max_turns=3,
-        message=f'Generate a unittest for the following Python function source code: \n\n{source_code}\n\n'
-                f'Return the test code and end with "FINISH".'
+
+    reply = sub_agent.generate_reply(
+        messages=[
+            {"role": "user", "content": f'Generate a unittest for the following Python function source code: \n\n{source_code}\n\n'
+                                        f'Return the test code and end with "FINISH".'
+                                        f'Do not write anything apart from the code. And do not use code-blocks. Or any none-code text '},
+        ],
     )
 
-    reply = user_proxy.last_message()
-    if not reply or "content" not in reply:
-        raise ValueError("No reply or content found")
+    if not reply:
+        raise ValueError("No reply found")
+
+    reply_value = ""
+    if isinstance(reply, dict):
+        reply_content = reply["content"]
+        if reply_content:
+            reply_value = reply_content
+        else:
+            raise ValueError("No content found in the reply")
+    else:
+        reply_value = reply
+
+    reply_value = reply_value.replace("\nFINISH", "").strip()
 
     # Extract the test code
-    test_code = reply["content"].replace("\nFINISH", "").strip()
+    test_code = reply_value
+
+    print("TEST:", test_code)
 
     # Use the same base filename with '_test' appended for the test file
-    test_filename = code_filename.replace(".py", "_test.py")
+    test_filename = code_filename.strip().replace(".py", "_test.py")
 
     # Ensure the coding directory exists
     if not os.path.exists(coding_directory):
