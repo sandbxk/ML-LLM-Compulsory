@@ -5,9 +5,7 @@ from autogen import AssistantAgent, UserProxyAgent, ChatResult, register_functio
 from autogen.coding import LocalCommandLineCodeExecutor
 
 from coding_agent.config import LLM_CONFIG
-from coding_agent.tools.code_outputter import output_code
-from coding_agent.tools.code_verifier import verify_function
-from coding_agent.tools.code_writer import write_function
+
 
 Coding_directory = "coding_directory"
 
@@ -48,7 +46,8 @@ def create_coding_agent() -> AssistantAgent:
         You are an AI assistant for writing and verifying Python code. Your task is to:
         1. Write Python functions based on the provided prompts.
         2. Write tests to ensure the validity of the code. Ensure the function passes predefined tests.
-        3. If tests are provided, write test cases and save them in the coding directory as well.
+        3. If the code is incorrect, provide feedback on the error and suggest corrections.
+        4. If the code is correct, present the final solution in the correct format and save it to a file.
       
 
         Only use tools to interact with the environment and the code. Don't try to reason or generate content outside the scope of the task.
@@ -86,50 +85,6 @@ def create_local_code_executor():
         work_dir="coding_directory",
     )
 
-
-def setup_agents1():
-    """
-    Setup the agents.
-    """
-    # Create the code executor, user proxy, and feedback analysis agent
-    code_executor = create_local_code_executor()
-    user_proxy = create_user_proxy(code_executor)
-    coding_agent = create_coding_agent()
-
-    """
-
-    # Add the feedback reader tool to the feedback analysis agent and user proxy agent
-    register_function(
-        write_function,
-        caller=coding_agent,
-        executor=user_proxy,
-        name="write_python_function",
-        description="Generates a Python function based on a task prompt and saves it to a file.",
-    )
-
-    # Add the sentiment analysis tool to the feedback analysis agent and user proxy agent
-    register_function(
-        verify_function,
-        caller=coding_agent,
-        executor=user_proxy,
-        name="verify_python_function",
-        description="Verifies the generated Python function by running predefined tests."
-    )
-
-
-    # Add the calculate average tool to the feedback analysis agent and user proxy agent
-    register_function(
-        output_code,
-        caller=coding_agent,
-        executor=user_proxy,
-        name="output_python_code",
-        description="Outputs the generated Python code in a code block format along with test verification results."
-    )
-    """
-
-
-    # Return the user proxy and feedback analysis agent
-    return user_proxy, coding_agent
 
 
 def setup_agents():
